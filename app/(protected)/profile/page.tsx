@@ -96,10 +96,9 @@ export default function Profile() {
       ((height / 100) *
       (height / 100));
 
-    setBmi(
-      Number(bmiValue).toFixed(1)
-    );
-
+setBmi(
+  parseFloat(Number(bmiValue).toFixed(1))
+);
     const kfaValue =
       belly > 0
         ? ((belly * 0.74) -
