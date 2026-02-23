@@ -1,21 +1,41 @@
 import OpenAI from "openai";
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
-});
-
 export async function POST(req: Request) {
 
   try {
 
-    const { text } = await req.json();
+    const apiKey =
+      process.env.OPENAI_API_KEY;
+
+    if (!apiKey) {
+
+      console.error(
+        "OPENAI_API_KEY fehlt"
+      );
+
+      return Response.json({
+        calories: 0,
+        protein: 0
+      });
+
+    }
+
+    const openai =
+      new OpenAI({
+        apiKey: apiKey
+      });
+
+    const { text } =
+      await req.json();
 
     const completion =
       await openai.chat.completions.create({
 
         model: "gpt-4o-mini",
 
-        response_format: { type: "json_object" },
+        response_format: {
+          type: "json_object"
+        },
 
         messages: [
           {
@@ -34,19 +54,27 @@ export async function POST(req: Request) {
       });
 
     const content =
-      completion.choices[0].message.content;
+      completion.choices[0]
+        .message.content;
 
     const parsed =
-      JSON.parse(content || "{}");
+      JSON.parse(
+        content || "{}"
+      );
 
     return Response.json({
-      calories: Number(parsed.calories) || 0,
-      protein: Number(parsed.protein) || 0
+      calories:
+        Number(parsed.calories) || 0,
+      protein:
+        Number(parsed.protein) || 0
     });
 
   } catch (error) {
 
-    console.error("OPENAI ERROR:", error);
+    console.error(
+      "OPENAI ERROR:",
+      error
+    );
 
     return Response.json({
       calories: 0,
