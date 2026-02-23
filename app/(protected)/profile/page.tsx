@@ -106,9 +106,9 @@ setBmi(
           44.74) / weight * 100
         : 0;
 
-    setKfa(
-      Number(kfaValue).toFixed(1)
-    );
+setKfa(
+  parseFloat(Number(kfaValue).toFixed(1))
+);
 
     const total =
       startWeight - goalWeight;
