@@ -64,7 +64,7 @@ export async function POST(req: Request) {
     const accessToken = await getPayPalAccessToken();
 
     // Fix: 4,99 EUR
-    const PRICE_EUR = "4.99";
+    const PRICE_EUR = "0.01";
 
     const orderRes = await fetch(`${baseUrl}/v2/checkout/orders`, {
       method: "POST",
