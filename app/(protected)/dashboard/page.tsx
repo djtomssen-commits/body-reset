@@ -129,38 +129,97 @@ export default function Dashboard() {
   };
 
   // Tagesbewertung (zielbasiert)
-  const dailyCoachStatus = (g: GoalType, cal: number, calGoal: number, prot: number, protGoal: number) => {
+  const dailyCoachStatus = (
+    g: GoalType,
+    cal: number,
+    calGoal: number,
+    prot: number,
+    protGoal: number
+  ) => {
+
+    // ✅ Noch nichts oder zu wenig getrackt
+    if (cal < 200 && prot < 10) {
+      return {
+        label: "📝 Noch nichts getrackt",
+        hint: "Trag deine erste Mahlzeit ein, dann bekommst du eine Bewertung."
+      };
+    }
+
+    // Optional: Warnung wenn deutlich zu wenig gegessen
+    if (cal < calGoal * 0.3) {
+      return {
+        label: "⚠️ Zu wenig gegessen",
+        hint: "Zu wenig Energie kann Fettverlust und Muskelaufbau bremsen."
+      };
+    }
+
     const calDiff = cal - calGoal;
     const calOk = Math.abs(calDiff) <= calGoal * 0.05; // ±5%
     const protOk = prot >= protGoal * 0.9;
 
-// Wenn heute noch nichts getrackt wurde, keine Bewertung ausgeben
-if (cal === 0 && prot === 0) {
-  return { label: "📝 Noch nichts getrackt", hint: "Trag heute mindestens eine Mahlzeit ein, dann gibt’s eine Bewertung." };
-}
-
     if (g === "fat_loss") {
-      if (cal <= calGoal && protOk) return { label: "✅ Optimal für Fettverlust", hint: "Kalorien im Ziel + Protein passt." };
-      if (cal <= calGoal && !protOk) return { label: "⚠️ Fast gut", hint: "Kalorien ok, aber Protein ist zu niedrig." };
-      return { label: "❌ Bremst Fortschritt", hint: "Du liegst über deinem Fettverlust-Ziel." };
+      if (cal <= calGoal && protOk)
+        return {
+          label: "✅ Optimal für Fettverlust",
+          hint: "Perfektes Defizit und genug Protein."
+        };
+
+      if (cal <= calGoal && !protOk)
+        return {
+          label: "⚠️ Protein zu niedrig",
+          hint: "Kalorien gut, aber mehr Protein beschleunigt Fettverlust."
+        };
+
+      return {
+        label: "❌ Bremst Fettverlust",
+        hint: "Du bist über deinem Kalorienziel."
+      };
     }
 
     if (g === "muscle_gain") {
-      if (cal >= calGoal * 0.95 && protOk) return { label: "✅ Optimal für Aufbau", hint: "Genug Energie + Protein passt." };
-      if (!protOk) return { label: "⚠️ Aufbau gebremst", hint: "Protein ist zu niedrig." };
-      return { label: "⚠️ Eher zu wenig", hint: "Für Aufbau fehlen Kalorien." };
+      if (cal >= calGoal * 0.95 && protOk)
+        return {
+          label: "✅ Optimal für Muskelaufbau",
+          hint: "Genug Energie und Protein."
+        };
+
+      if (!protOk)
+        return {
+          label: "⚠️ Protein zu niedrig",
+          hint: "Protein ist entscheidend für Muskelwachstum."
+        };
+
+      return {
+        label: "⚠️ Zu wenig Kalorien",
+        hint: "Für Muskelaufbau brauchst du mehr Energie."
+      };
     }
 
     if (g === "maintain") {
-      if (calOk && protOk) return { label: "✅ Stabil & sauber", hint: "Im Rahmen + Protein passt." };
-      if (calOk && !protOk) return { label: "⚠️ Ok, aber Protein fehlt", hint: "Stabil, aber Protein ist zu niedrig." };
-      return { label: "⚠️ Außerhalb vom Rahmen", hint: "Zu weit weg vom Ziel-Kalorienbereich." };
+      if (calOk && protOk)
+        return {
+          label: "✅ Perfekt stabil",
+          hint: "Du hältst dein Gewicht optimal."
+        };
+
+      return {
+        label: "⚠️ Leichte Abweichung",
+        hint: "Du bist etwas außerhalb deines Zielbereichs."
+      };
     }
 
     // health
-    if (cal <= calGoal * 1.05 && protOk) return { label: "✅ Sehr solide", hint: "Gute Basis heute." };
-    if (!protOk) return { label: "⚠️ Protein fehlt", hint: "Gesund ja, aber Protein ist zu niedrig." };
-    return { label: "⚠️ Etwas drüber", hint: "Nicht schlimm, aber du bist über dem Tagesziel." };
+    if (protOk)
+      return {
+        label: "✅ Gute Ernährung",
+        hint: "Du bist auf einem gesunden Weg."
+      };
+
+    return {
+      label: "⚠️ Mehr Protein empfohlen",
+      hint: "Protein unterstützt Gesundheit und Muskeln."
+    };
+
   };
 
   const etaToGoalDays = (g: GoalType, currentKg: number, targetKg: number) => {
@@ -450,6 +509,42 @@ if (cal === 0 && prot === 0) {
             </div>
           )}
 
+          {/* CALORIES */}
+          <div className="bg-white/10 backdrop-blur-xl border border-white/20 p-5 rounded-xl shadow">
+            <div className="flex justify-between mb-2">
+              <div className="font-bold">
+                Kalorien
+              </div>
+              <div className="text-sm text-gray-400">
+                {calories}/{caloriesGoal}
+              </div>
+            </div>
+            <div className="w-full bg-gray-700 h-3 rounded">
+              <div
+                className="bg-gradient-to-r from-green-400 to-emerald-500 h-3 rounded"
+                style={{ width: caloriesPercent+"%" }}
+              />
+            </div>
+          </div>
+
+          {/* PROTEIN */}
+          <div className="bg-white/10 backdrop-blur-xl border border-white/20 p-5 rounded-xl shadow">
+            <div className="flex justify-between mb-2">
+              <div className="font-bold">
+                Protein
+              </div>
+              <div className="text-sm text-gray-400">
+                {protein}/{proteinGoal} g
+              </div>
+            </div>
+            <div className="w-full bg-gray-700 h-3 rounded">
+              <div
+                className="bg-gradient-to-r from-blue-400 to-cyan-500 h-3 rounded"
+                style={{ width: proteinPercent+"%" }}
+              />
+            </div>
+          </div>
+
           {/* COACH STATUS */}
           {goalType && (
             <div className="bg-white/10 backdrop-blur-xl border border-white/20 p-5 rounded-xl shadow">
@@ -556,42 +651,6 @@ if (cal === 0 && prot === 0) {
               <div
                 className="bg-gradient-to-r from-green-400 to-emerald-500 h-4 rounded"
                 style={{ width: progress+"%" }}
-              />
-            </div>
-          </div>
-
-          {/* CALORIES */}
-          <div className="bg-white/10 backdrop-blur-xl border border-white/20 p-5 rounded-xl shadow">
-            <div className="flex justify-between mb-2">
-              <div className="font-bold">
-                Kalorien
-              </div>
-              <div className="text-sm text-gray-400">
-                {calories}/{caloriesGoal}
-              </div>
-            </div>
-            <div className="w-full bg-gray-700 h-3 rounded">
-              <div
-                className="bg-gradient-to-r from-green-400 to-emerald-500 h-3 rounded"
-                style={{ width: caloriesPercent+"%" }}
-              />
-            </div>
-          </div>
-
-          {/* PROTEIN */}
-          <div className="bg-white/10 backdrop-blur-xl border border-white/20 p-5 rounded-xl shadow">
-            <div className="flex justify-between mb-2">
-              <div className="font-bold">
-                Protein
-              </div>
-              <div className="text-sm text-gray-400">
-                {protein}/{proteinGoal} g
-              </div>
-            </div>
-            <div className="w-full bg-gray-700 h-3 rounded">
-              <div
-                className="bg-gradient-to-r from-blue-400 to-cyan-500 h-3 rounded"
-                style={{ width: proteinPercent+"%" }}
               />
             </div>
           </div>
