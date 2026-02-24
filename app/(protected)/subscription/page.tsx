@@ -37,6 +37,57 @@ export default function SubscriptionPage() {
   // ✅ NEU: PayPal SDK ready Flag (damit render nicht zu früh passiert)
   const [paypalReady, setPaypalReady] = useState(false);
 
+  // ✅ NEU: Rechtliches akzeptiert (AGB/Widerruf/Datenschutz)
+  const [legalAccepted, setLegalAccepted] = useState(false);
+
+  // ✅ NEU: Digitale Leistung beginnt sofort + Widerrufsrecht kann erlöschen
+  const [digitalWaiverAccepted, setDigitalWaiverAccepted] = useState(false);
+
+  // ✅ NEU: Consent einmalig speichern Flag
+  const [consentsSaved, setConsentsSaved] = useState(false);
+
+  // ✅ NEU: zentrale Freigabe, damit alle Stellen exakt gleich prüfen
+  const canPurchase = useMemo(() => {
+    return legalAccepted && digitalWaiverAccepted;
+  }, [legalAccepted, digitalWaiverAccepted]);
+
+  // ✅ NEU: Serverseitig Consent speichern (damit create-order/capture-order durchgehen)
+  const saveConsents = async () => {
+    try {
+      const user = auth.currentUser;
+      if (!user) return;
+
+      const token = await user.getIdToken();
+      const res = await fetch("/api/subscription/accept-consents", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const json = await res.json().catch(() => null);
+      if (!res.ok || !json?.ok) {
+        setErrorMsg(json?.error || "Consent speichern fehlgeschlagen.");
+        return;
+      }
+
+      setConsentsSaved(true);
+    } catch (e: any) {
+      console.error(e);
+      setErrorMsg(e?.message || "Consent speichern fehlgeschlagen (Network/Server).");
+    }
+  };
+
+  // ✅ NEU: Sobald beide Checkboxen gesetzt sind -> Consent einmalig speichern
+  useEffect(() => {
+    if (!canPurchase) return;
+    if (consentsSaved) return;
+    if (!userId) return;
+
+    saveConsents();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canPurchase, consentsSaved, userId]);
+
   const today = useMemo(() => new Date(), []);
   const todayStr = useMemo(() => today.toDateString(), [today]);
 
@@ -166,6 +217,9 @@ export default function SubscriptionPage() {
     // ✅ NEU: erst rendern wenn SDK geladen ist
     if (!paypalReady) return;
 
+    // ✅ NEU: Rechtliches + Digital-Waiver muss akzeptiert sein, bevor PayPal gerendert wird
+    if (!canPurchase) return;
+
     const run = async () => {
       if (!userId) return;
       const user = auth.currentUser;
@@ -231,7 +285,7 @@ export default function SubscriptionPage() {
       console.error(e);
       setErrorMsg(e?.message || "PayPal Setup fehlgeschlagen.");
     });
-  }, [userId, paypalReady]);
+  }, [userId, paypalReady, canPurchase]);
 
   const canClaimBonus = useMemo(() => {
     if (!subscription) return false;
@@ -297,6 +351,12 @@ export default function SubscriptionPage() {
 
     if (!userId) return;
 
+    // ✅ NEU: Blocken wenn nicht akzeptiert
+    if (!canPurchase) {
+      setErrorMsg("Bitte zuerst AGB/Widerruf/Datenschutz akzeptieren und dem sofortigen Start der digitalen Leistung zustimmen.");
+      return;
+    }
+
     // Scroll to PayPal
     paypalWrapRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
 
@@ -307,6 +367,12 @@ export default function SubscriptionPage() {
   const handlePayWithBalance = async () => {
     setErrorMsg("");
     setStatusMsg("");
+
+    // ✅ NEU: Blocken wenn nicht akzeptiert
+    if (!canPurchase) {
+      setErrorMsg("Bitte zuerst AGB/Widerruf/Datenschutz akzeptieren und dem sofortigen Start der digitalen Leistung zustimmen.");
+      return;
+    }
 
     const user = auth.currentUser;
     if (!user) return;
@@ -387,25 +453,92 @@ export default function SubscriptionPage() {
 
             {!loading && !subscription && <div>Kein Abo aktiv</div>}
 
+            {/* ✅ NEU: Rechtliches Checkbox */}
+            <div className="mt-4 rounded-lg border border-white/20 bg-white/5 p-3">
+              <label className="flex items-start gap-3 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={legalAccepted}
+                  onChange={(e) => {
+                    setLegalAccepted(e.target.checked);
+                    if (!e.target.checked) setConsentsSaved(false);
+                  }}
+                  className="mt-1 h-4 w-4 accent-emerald-500"
+                />
+                <span className="text-sm leading-5 opacity-90">
+                  Ich akzeptiere die{" "}
+                  <a className="underline hover:opacity-100" href="/agb" target="_blank" rel="noreferrer">
+                    AGB
+                  </a>{" "}
+                  und habe die{" "}
+                  <a className="underline hover:opacity-100" href="/widerruf" target="_blank" rel="noreferrer">
+                    Widerrufsbelehrung
+                  </a>{" "}
+                  sowie die{" "}
+                  <a className="underline hover:opacity-100" href="/datenschutz" target="_blank" rel="noreferrer">
+                    Datenschutzerklärung
+                  </a>{" "}
+                  gelesen.
+                </span>
+              </label>
+            </div>
+
+            {/* ✅ NEU: Digital-Waiver Checkbox */}
+            <div className="mt-3 rounded-lg border border-white/20 bg-white/5 p-3">
+              <label className="flex items-start gap-3 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={digitalWaiverAccepted}
+                  onChange={(e) => {
+                    setDigitalWaiverAccepted(e.target.checked);
+                    if (!e.target.checked) setConsentsSaved(false);
+                  }}
+                  className="mt-1 h-4 w-4 accent-emerald-500"
+                />
+                <span className="text-sm leading-5 opacity-90">
+                  Ich stimme ausdrücklich zu, dass die Ausführung der digitalen Leistung (Zugang zur App/Features)
+                  vor Ablauf der Widerrufsfrist beginnt. Mir ist bekannt, dass ich dadurch bei vollständiger Erbringung
+                  mein Widerrufsrecht verlieren kann.
+                </span>
+              </label>
+
+              {!digitalWaiverAccepted && (
+                <div className="mt-2 text-xs text-amber-300">
+                  Ohne diese Zustimmung darf der digitale Zugang nicht sofort freigeschaltet werden.
+                </div>
+              )}
+            </div>
+
+            {(!canPurchase) && (
+              <div className="mt-3 text-xs text-amber-300">
+                Für den Kauf müssen beide Haken gesetzt sein.
+              </div>
+            )}
+
             {/* ✅ NEU: Guthaben-Button */}
             <button
               onClick={handlePayWithBalance}
-              disabled={Number(guthaben || 0) < 4.99}
+              disabled={!canPurchase || Number(guthaben || 0) < 4.99}
               className={`mt-3 p-3 rounded w-full font-bold ${
-                Number(guthaben || 0) >= 4.99
+                canPurchase && Number(guthaben || 0) >= 4.99
                   ? "bg-emerald-500"
                   : "bg-white/10 border border-white/20 opacity-60"
               }`}
             >
-              {Number(guthaben || 0) >= 4.99
-                ? "Mit Guthaben bezahlen (4,99€)"
-                : `Nicht genug Guthaben (du hast ${Number(guthaben || 0).toFixed(2)}€)`}
+              {!canPurchase
+                ? "Bitte Checkboxen bestätigen"
+                : Number(guthaben || 0) >= 4.99
+                  ? "Mit Guthaben bezahlen (4,99€)"
+                  : `Nicht genug Guthaben (du hast ${Number(guthaben || 0).toFixed(2)}€)`}
             </button>
 
             {/* Kaufen-Button bleibt, zeigt PayPal an */}
             <button
               onClick={handleBuySubscription}
-              className="mt-4 bg-blue-500 p-3 rounded w-full font-bold flex items-center justify-center gap-2"
+              disabled={!canPurchase}
+              className={`mt-4 p-3 rounded w-full font-bold flex items-center justify-center gap-2 ${
+                canPurchase ? "bg-blue-500" : "bg-white/10 border border-white/20 opacity-60"
+              }`}
             >
               <span>Monatsabo kaufen (4,99€)</span>
               {/* PayPal Icon (SVG) */}
@@ -422,6 +555,11 @@ export default function SubscriptionPage() {
               <div className="text-sm opacity-80 mb-2">
                 {isActive ? "Mit PayPal verlängern" : "Mit PayPal aktivieren"}
               </div>
+              {(!canPurchase) && (
+                <div className="text-xs text-amber-300 mb-2">
+                  Bitte setze beide Checkboxen, dann erscheinen die PayPal-Buttons.
+                </div>
+              )}
               <div id="paypal-button-container" />
             </div>
           </div>

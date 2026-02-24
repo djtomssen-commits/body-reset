@@ -53,12 +53,41 @@ async function getPayPalAccessToken() {
   return json.access_token as string;
 }
 
+/** ✅ NEU: helper um Firestore Timestamp grob zu validieren */
+function isRecentTimestamp(ts: any, maxAgeMinutes: number) {
+  if (!ts || typeof ts.toDate !== "function") return false;
+  const d = ts.toDate() as Date;
+  const ageMs = Date.now() - d.getTime();
+  return ageMs >= 0 && ageMs <= maxAgeMinutes * 60 * 1000;
+}
+
 export async function POST(req: Request) {
   try {
     initAdmin();
 
     // Wichtig: UID NICHT aus Body, sondern aus Firebase Token
     const uid = await getUidFromFirebaseAuth(req);
+
+    // ✅ NEU: Consent serverseitig prüfen (AGB/Widerruf/Datenschutz + digitaler Start)
+    const db = admin.firestore();
+    const subRef = db.collection("subscriptions").doc(uid);
+
+    const subSnap = await subRef.get();
+    const subData = subSnap.exists ? (subSnap.data() as any) : null;
+
+    const legalOk = isRecentTimestamp(subData?.legalAcceptedAt, 24 * 60); // 24h
+    const waiverOk = isRecentTimestamp(subData?.digitalWaiverAcceptedAt, 24 * 60); // 24h
+
+    if (!legalOk || !waiverOk) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            "Consent missing: Bitte AGB/Widerruf/Datenschutz akzeptieren und dem sofortigen Start der digitalen Leistung zustimmen.",
+        },
+        { status: 400 }
+      );
+    }
 
     const baseUrl = process.env.PAYPAL_BASE_URL!;
     const accessToken = await getPayPalAccessToken();

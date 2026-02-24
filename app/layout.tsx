@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-// SubscriptionGuard und Navbar bleiben importierbar, aber werden hier NICHT benutzt
+
+// bleiben importiert, wie bei dir
 import SubscriptionGuard from "./components/SubscriptionGuard";
 import Navbar from "./components/Navbar";
 
@@ -28,27 +29,52 @@ export default function RootLayout({
   return (
     <html lang="de">
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
-        <div className="appShell">
-          <main className="appMain">{children}</main>
+        
+        {/* Layout Wrapper */}
+        <div className="min-h-screen flex flex-col">
 
-          <footer className="appFooter">
-            <div className="footerInner">
-              <nav className="footerLinks" aria-label="Rechtliches">
-                <a href="/impressum">Impressum</a>
-                <span className="sep">|</span>
-                <a href="/datenschutz">Datenschutz</a>
-                <span className="sep">|</span>
-                <a href="/agb">AGB</a>
-                <span className="sep">|</span>
-                <a href="/widerruf">Widerruf</a>
+          {/* Seiteninhalt */}
+          <main className="flex-1">
+            {children}
+          </main>
+
+          {/* Footer */}
+          <footer className="border-t border-black/10 dark:border-white/10 py-4 mt-10">
+            <div className="mx-auto max-w-5xl px-4 flex flex-wrap items-center justify-between gap-3 text-sm">
+
+              <nav className="flex flex-wrap items-center gap-2">
+                <a href="/impressum" className="opacity-80 hover:opacity-100 hover:underline">
+                  Impressum
+                </a>
+
+                <span className="opacity-50">|</span>
+
+                <a href="/datenschutz" className="opacity-80 hover:opacity-100 hover:underline">
+                  Datenschutz
+                </a>
+
+                <span className="opacity-50">|</span>
+
+                <a href="/agb" className="opacity-80 hover:opacity-100 hover:underline">
+                  AGB
+                </a>
+
+                <span className="opacity-50">|</span>
+
+                <a href="/widerruf" className="opacity-80 hover:opacity-100 hover:underline">
+                  Widerruf
+                </a>
               </nav>
 
-              <div className="footerMeta">
-                © {new Date().getFullYear()} Fitness App
+              <div className="opacity-70">
+                © {new Date().getFullYear()} Body-Reset
               </div>
+
             </div>
           </footer>
+
         </div>
+
       </body>
     </html>
   );

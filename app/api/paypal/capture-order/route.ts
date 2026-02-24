@@ -66,6 +66,14 @@ function addOneMonthFrom(date: Date) {
   return d;
 }
 
+/** ✅ NEU: helper um Firestore Timestamp grob zu validieren */
+function isRecentTimestamp(ts: any, maxAgeMinutes: number) {
+  if (!ts || typeof ts.toDate !== "function") return false;
+  const d = ts.toDate() as Date;
+  const ageMs = Date.now() - d.getTime();
+  return ageMs >= 0 && ageMs <= maxAgeMinutes * 60 * 1000;
+}
+
 export async function POST(req: Request) {
   try {
     initAdmin();
@@ -75,6 +83,27 @@ export async function POST(req: Request) {
 
     if (!orderId) {
       return NextResponse.json({ ok: false, error: "Missing orderId" }, { status: 400 });
+    }
+
+    // ✅ NEU: Consent serverseitig prüfen (Frontend-Checkboxen reichen nicht)
+    const db = admin.firestore();
+    const subRef = db.collection("subscriptions").doc(uid);
+
+    const subSnapPre = await subRef.get();
+    const subDataPre = subSnapPre.exists ? (subSnapPre.data() as any) : null;
+
+    const legalOk = isRecentTimestamp(subDataPre?.legalAcceptedAt, 24 * 60); // 24h
+    const waiverOk = isRecentTimestamp(subDataPre?.digitalWaiverAcceptedAt, 24 * 60); // 24h
+
+    if (!legalOk || !waiverOk) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            "Consent missing: Bitte AGB/Widerruf/Datenschutz akzeptieren und dem sofortigen Start der digitalen Leistung zustimmen.",
+        },
+        { status: 400 }
+      );
     }
 
     const baseUrl = process.env.PAYPAL_BASE_URL!;
@@ -108,8 +137,7 @@ export async function POST(req: Request) {
     }
 
     // 2) Firestore: Abo verlängern
-    const db = admin.firestore();
-    const subRef = db.collection("subscriptions").doc(uid);
+    // (db und subRef sind oben bereits initialisiert)
 
     await db.runTransaction(async (tx) => {
       const snap = await tx.get(subRef);
@@ -136,6 +164,10 @@ export async function POST(req: Request) {
           streak: 0,
           loginBonus: 0,
           lastBonusClaim: "",
+
+          // ✅ NEU: Consent-Nachweis (bleibt erhalten)
+          legalAcceptedAt: data?.legalAcceptedAt || admin.firestore.Timestamp.fromDate(now),
+          digitalWaiverAcceptedAt: data?.digitalWaiverAcceptedAt || admin.firestore.Timestamp.fromDate(now),
 
           // Audit / Nachweis
           lastPayment: {
