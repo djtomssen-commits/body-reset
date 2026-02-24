@@ -27,10 +27,28 @@ export default function RootLayout({
 }) {
   return (
     <html lang="de">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
-        {children}
+      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+        <div className="appShell">
+          <main className="appMain">{children}</main>
+
+          <footer className="appFooter">
+            <div className="footerInner">
+              <nav className="footerLinks" aria-label="Rechtliches">
+                <a href="/impressum">Impressum</a>
+                <span className="sep">|</span>
+                <a href="/datenschutz">Datenschutz</a>
+                <span className="sep">|</span>
+                <a href="/agb">AGB</a>
+                <span className="sep">|</span>
+                <a href="/widerruf">Widerruf</a>
+              </nav>
+
+              <div className="footerMeta">
+                © {new Date().getFullYear()} Fitness App
+              </div>
+            </div>
+          </footer>
+        </div>
       </body>
     </html>
   );
