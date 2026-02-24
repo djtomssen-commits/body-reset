@@ -138,7 +138,7 @@ export default function Dashboard() {
   ) => {
 
     // ✅ Noch nichts oder zu wenig getrackt
-    if (cal < 200 && prot < 10) {
+    if (cal < 10 && prot < 2) {
       return {
         label: "📝 Noch nichts getrackt",
         hint: "Trag deine erste Mahlzeit ein, dann bekommst du eine Bewertung."

@@ -80,6 +80,13 @@ export default function OnboardingPage() {
 
     const targets = recommendTargets(goal, w, h);
 
+    const defaultGoalWeight =
+      goal === "fat_loss"
+        ? w - 5
+        : goal === "muscle_gain"
+          ? w + 3
+          : w;
+
     await setDoc(
       doc(db, "users", user.uid),
       {
@@ -94,7 +101,7 @@ export default function OnboardingPage() {
         startWeight: w,
 
         goalWeight:
-          Number(goalWeight) || w - 5,
+          Number(goalWeight) || defaultGoalWeight,
 
         caloriesGoal:
           targets.cal,
