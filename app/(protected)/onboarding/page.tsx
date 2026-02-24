@@ -5,7 +5,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { auth, db } from "../../lib/firebase";
-import { doc, updateDoc } from "firebase/firestore";
+import { doc, setDoc } from "firebase/firestore";
 import { updateProfile } from "firebase/auth"; // ✅ HINZUGEFÜGT
 
 export default function OnboardingPage() {
@@ -16,7 +16,9 @@ export default function OnboardingPage() {
 
   const [step, setStep] = useState(1);
 
-  const [goal, setGoal] = useState("lose");
+  type GoalType = "fat_loss" | "maintain" | "muscle_gain" | "health";
+  const [goal, setGoal] = useState<GoalType>("fat_loss");
+
   const [name, setName] = useState("");
   const [height, setHeight] = useState("");
   const [weight, setWeight] = useState("");
@@ -25,6 +27,50 @@ export default function OnboardingPage() {
   const next = () => setStep(step + 1);
   const back = () => setStep(step - 1);
 
+  const clamp = (n: number, min: number, max: number) => {
+    return Math.max(min, Math.min(max, n));
+  };
+
+  // Simple BMR/TDEE (ohne Alter, bewusst simpel)
+  // BMR (Mifflin ohne Alter-Teil): 10*kg + 6.25*cm + 5
+  const estimateTDEE = (kg: number, cm: number) => {
+    const bmr = 10 * kg + 6.25 * cm + 5;
+    const activity = 1.4; // konservativ "leicht aktiv"
+    return bmr * activity;
+  };
+
+  const recommendTargets = (g: GoalType, kg: number, cm: number) => {
+    const tdee = estimateTDEE(kg, cm);
+
+    let cal = tdee;
+    let prot = 1.6 * kg;
+
+    if (g === "fat_loss") {
+      cal = tdee - 500;
+      prot = 2.0 * kg;
+    }
+
+    if (g === "muscle_gain") {
+      cal = tdee + 250;
+      prot = 1.8 * kg;
+    }
+
+    if (g === "maintain") {
+      cal = tdee;
+      prot = 1.6 * kg;
+    }
+
+    if (g === "health") {
+      cal = tdee - 250;
+      prot = 1.6 * kg;
+    }
+
+    cal = clamp(Math.round(cal), 1400, 4000);
+    prot = clamp(Math.round(prot), 90, 260);
+
+    return { cal, prot };
+  };
+
   const finish = async () => {
 
     if (!user) return;
@@ -32,34 +78,15 @@ export default function OnboardingPage() {
     const h = Number(height);
     const w = Number(weight);
 
-    // Kalorien automatisch berechnen
-    const bmr =
-      10 * w +
-      6.25 * h -
-      5 * 30 +
-      5;
+    const targets = recommendTargets(goal, w, h);
 
-    let calories =
-      bmr * 1.4;
-
-    if (goal === "lose")
-      calories -= 300;
-
-    if (goal === "gain")
-      calories += 250;
-
-    const protein =
-      goal === "lose"
-        ? w * 2.2
-        : w * 2;
-
-    await updateDoc(
+    await setDoc(
       doc(db, "users", user.uid),
       {
 
         name,
 
-        goal,
+        goalType: goal,
 
         height: h,
         weight: w,
@@ -70,14 +97,15 @@ export default function OnboardingPage() {
           Number(goalWeight) || w - 5,
 
         caloriesGoal:
-          Math.round(calories),
+          targets.cal,
 
         proteinGoal:
-          Math.round(protein),
+          targets.prot,
 
         onboardingCompleted: true
 
-      }
+      },
+      { merge: true }
     );
 
     // ✅ DAS IST DER FIX — displayName setzen
@@ -133,8 +161,8 @@ export default function OnboardingPage() {
             <div className="space-y-3">
 
               <button
-                onClick={()=>{
-                  setGoal("lose");
+                onClick={() => {
+                  setGoal("fat_loss");
                   next();
                 }}
                 className="w-full bg-white/10 p-3 rounded-xl text-white hover:bg-green-500 transition"
@@ -143,23 +171,33 @@ export default function OnboardingPage() {
               </button>
 
               <button
-                onClick={()=>{
+                onClick={() => {
                   setGoal("maintain");
                   next();
                 }}
                 className="w-full bg-white/10 p-3 rounded-xl text-white hover:bg-green-500 transition"
               >
-                Muskeln erhalten
+                Gewicht halten
               </button>
 
               <button
-                onClick={()=>{
-                  setGoal("gain");
+                onClick={() => {
+                  setGoal("muscle_gain");
                   next();
                 }}
                 className="w-full bg-white/10 p-3 rounded-xl text-white hover:bg-green-500 transition"
               >
                 Muskeln aufbauen
+              </button>
+
+              <button
+                onClick={() => {
+                  setGoal("health");
+                  next();
+                }}
+                className="w-full bg-white/10 p-3 rounded-xl text-white hover:bg-green-500 transition"
+              >
+                Gesünder leben
               </button>
 
             </div>
@@ -183,21 +221,21 @@ export default function OnboardingPage() {
             <input
               placeholder="Name"
               value={name}
-              onChange={(e)=>setName(e.target.value)}
+              onChange={(e) => setName(e.target.value)}
               className="w-full mb-3 p-3 rounded-xl bg-white/10 text-white"
             />
 
             <input
               placeholder="Größe (cm)"
               value={height}
-              onChange={(e)=>setHeight(e.target.value)}
+              onChange={(e) => setHeight(e.target.value)}
               className="w-full mb-3 p-3 rounded-xl bg-white/10 text-white"
             />
 
             <input
               placeholder="Gewicht (kg)"
               value={weight}
-              onChange={(e)=>setWeight(e.target.value)}
+              onChange={(e) => setWeight(e.target.value)}
               className="w-full mb-3 p-3 rounded-xl bg-white/10 text-white"
             />
 
@@ -227,7 +265,7 @@ export default function OnboardingPage() {
             <input
               placeholder="Zielgewicht (optional)"
               value={goalWeight}
-              onChange={(e)=>setGoalWeight(e.target.value)}
+              onChange={(e) => setGoalWeight(e.target.value)}
               className="w-full mb-4 p-3 rounded-xl bg-white/10 text-white"
             />
 
