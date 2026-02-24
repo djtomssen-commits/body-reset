@@ -212,6 +212,15 @@ export default function SubscriptionPage() {
     };
   }, []);
 
+  // ✅ NEU: Sobald Consent gespeichert ist -> PayPal Reset, damit render sauber passiert
+  useEffect(() => {
+    if (!consentsSaved) return;
+    paypalRenderedRef.current = false;
+
+    const el = document.getElementById("paypal-button-container");
+    if (el) el.innerHTML = "";
+  }, [consentsSaved]);
+
   // PayPal Buttons rendern (einmalig)
   useEffect(() => {
     // ✅ NEU: erst rendern wenn SDK geladen ist
@@ -219,6 +228,9 @@ export default function SubscriptionPage() {
 
     // ✅ NEU: Rechtliches + Digital-Waiver muss akzeptiert sein, bevor PayPal gerendert wird
     if (!canPurchase) return;
+
+    // ✅ NEU: erst PayPal rendern wenn Consent wirklich gespeichert ist
+    if (!consentsSaved) return;
 
     const run = async () => {
       if (!userId) return;
@@ -285,7 +297,7 @@ export default function SubscriptionPage() {
       console.error(e);
       setErrorMsg(e?.message || "PayPal Setup fehlgeschlagen.");
     });
-  }, [userId, paypalReady, canPurchase]);
+  }, [userId, paypalReady, canPurchase, consentsSaved]);
 
   const canClaimBonus = useMemo(() => {
     if (!subscription) return false;

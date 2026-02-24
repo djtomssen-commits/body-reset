@@ -75,7 +75,7 @@ export default function OnboardingPage() {
         proteinGoal:
           Math.round(protein),
 
-        onboardingComplete: true
+        onboardingCompleted: true
 
       }
     );

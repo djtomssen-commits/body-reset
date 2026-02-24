@@ -111,6 +111,8 @@ export default function LoginPage() {
         streak: 0,
         trainingCount: 0,
 
+        onboardingCompleted: false,
+
         createdAt:
           Date.now()
 
@@ -163,7 +165,16 @@ export default function LoginPage() {
 
         }
 
-        if (isRegister) {
+        const ref =
+          doc(db, "users", result.user.uid);
+
+        const snap =
+          await getDoc(ref);
+
+        if (
+          !snap.exists() ||
+          !snap.data()?.onboardingCompleted
+        ) {
 
           router.push("/onboarding");
 
@@ -212,7 +223,7 @@ export default function LoginPage() {
 
         if (
           !snap.exists() ||
-          !snap.data().onboardingComplete
+          !snap.data()?.onboardingCompleted
         ) {
 
           router.push("/onboarding");
