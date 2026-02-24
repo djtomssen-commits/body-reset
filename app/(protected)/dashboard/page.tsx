@@ -72,10 +72,145 @@ export default function Dashboard() {
   const [kfa, setKfa] = useState(0);
   const [progress, setProgress] = useState(0);
 
+  // GOAL ENGINE
+  type GoalType = "fat_loss" | "muscle_gain" | "maintain" | "health";
+  const [goalType, setGoalType] = useState<GoalType | null>(null);
+  const [showGoalPick, setShowGoalPick] = useState(false);
+
   const levelProgress = xp % 100;
 
   const caloriesPercent = Math.min((calories / caloriesGoal) * 100, 100);
   const proteinPercent = Math.min((protein / proteinGoal) * 100, 100);
+
+  const goalLabel = (g: GoalType) => {
+    if (g === "fat_loss") return "Fett verlieren";
+    if (g === "muscle_gain") return "Muskeln aufbauen";
+    if (g === "maintain") return "Gewicht halten";
+    return "Gesünder leben";
+  };
+
+  const clamp = (n: number, min: number, max: number) => {
+    return Math.max(min, Math.min(max, n));
+  };
+
+  // Simple BMR/TDEE (ohne Alter, bewusst simpel)
+  // BMR (Mifflin ohne Alter-Teil): 10*kg + 6.25*cm + 5
+  const estimateTDEE = (kg: number, cm: number) => {
+    const bmr = 10 * kg + 6.25 * cm + 5;
+    const activity = 1.4; // konservativ "leicht aktiv"
+    return bmr * activity;
+  };
+
+  const recommendTargets = (g: GoalType, kg: number, cm: number) => {
+    const tdee = estimateTDEE(kg, cm);
+
+    let cal = tdee;
+    let prot = 1.6 * kg;
+
+    if (g === "fat_loss") {
+      cal = tdee - 500;
+      prot = 2.0 * kg;
+    } else if (g === "muscle_gain") {
+      cal = tdee + 250;
+      prot = 1.8 * kg;
+    } else if (g === "maintain") {
+      cal = tdee;
+      prot = 1.6 * kg;
+    } else if (g === "health") {
+      cal = tdee - 250;
+      prot = 1.6 * kg;
+    }
+
+    // harte Grenzen, damit nix absurd wird
+    cal = clamp(Math.round(cal), 1400, 4000);
+    prot = clamp(Math.round(prot), 90, 260);
+
+    return { cal, prot };
+  };
+
+  // Tagesbewertung (zielbasiert)
+  const dailyCoachStatus = (g: GoalType, cal: number, calGoal: number, prot: number, protGoal: number) => {
+    const calDiff = cal - calGoal;
+    const calOk = Math.abs(calDiff) <= calGoal * 0.05; // ±5%
+    const protOk = prot >= protGoal * 0.9;
+
+    if (g === "fat_loss") {
+      if (cal <= calGoal && protOk) return { label: "✅ Optimal für Fettverlust", hint: "Kalorien im Ziel + Protein passt." };
+      if (cal <= calGoal && !protOk) return { label: "⚠️ Fast gut", hint: "Kalorien ok, aber Protein ist zu niedrig." };
+      return { label: "❌ Bremst Fortschritt", hint: "Du liegst über deinem Fettverlust-Ziel." };
+    }
+
+    if (g === "muscle_gain") {
+      if (cal >= calGoal * 0.95 && protOk) return { label: "✅ Optimal für Aufbau", hint: "Genug Energie + Protein passt." };
+      if (!protOk) return { label: "⚠️ Aufbau gebremst", hint: "Protein ist zu niedrig." };
+      return { label: "⚠️ Eher zu wenig", hint: "Für Aufbau fehlen Kalorien." };
+    }
+
+    if (g === "maintain") {
+      if (calOk && protOk) return { label: "✅ Stabil & sauber", hint: "Im Rahmen + Protein passt." };
+      if (calOk && !protOk) return { label: "⚠️ Ok, aber Protein fehlt", hint: "Stabil, aber Protein ist zu niedrig." };
+      return { label: "⚠️ Außerhalb vom Rahmen", hint: "Zu weit weg vom Ziel-Kalorienbereich." };
+    }
+
+    // health
+    if (cal <= calGoal * 1.05 && protOk) return { label: "✅ Sehr solide", hint: "Gute Basis heute." };
+    if (!protOk) return { label: "⚠️ Protein fehlt", hint: "Gesund ja, aber Protein ist zu niedrig." };
+    return { label: "⚠️ Etwas drüber", hint: "Nicht schlimm, aber du bist über dem Tagesziel." };
+  };
+
+  const etaToGoalDays = (g: GoalType, currentKg: number, targetKg: number) => {
+    const diff = targetKg - currentKg;
+
+    // Nur sinnvoll für Ziele mit Gewicht
+    if (g === "maintain" || g === "health") return null;
+    if (diff === 0) return 0;
+
+    // Konservative Raten (kg/Woche)
+    // Fettverlust: ~0.5% Körpergewicht/Woche
+    // Aufbau: ~0.25% Körpergewicht/Woche
+    const weekly =
+      g === "fat_loss"
+        ? Math.max(0.25, (currentKg * 0.005))
+        : Math.max(0.15, (currentKg * 0.0025));
+
+    const weeks = Math.abs(diff) / weekly;
+    return Math.ceil(weeks * 7);
+  };
+
+  const saveGoal = async (g: GoalType) => {
+    if (!userId) return;
+
+    const targets = recommendTargets(g, weight, height);
+
+    // user doc updaten (oder anlegen)
+    const ref = doc(db, "users", userId);
+    const snap = await getDoc(ref);
+
+    if (snap.exists()) {
+      await updateDoc(ref, {
+        goalType: g,
+        caloriesGoal: targets.cal,
+        proteinGoal: targets.prot,
+      });
+    } else {
+      await setDoc(ref, {
+        goalType: g,
+        caloriesGoal: targets.cal,
+        proteinGoal: targets.prot,
+        weight,
+        height,
+        belly,
+        startWeight,
+        goalWeight,
+        xp,
+      });
+    }
+
+    setGoalType(g);
+    setCaloriesGoal(targets.cal);
+    setProteinGoal(targets.prot);
+    setShowGoalPick(false);
+  };
 
   // AUTH + LOAD DATA + LOGIN BONUS
   useEffect(() => {
@@ -123,7 +258,7 @@ export default function Dashboard() {
 
         const snap = await getDoc(doc(db, "users", user.uid));
         if (snap.exists()) {
-          const data = snap.data();
+          const data:any = snap.data();
           setXp(data.xp || 0);
           setWeight(data.weight || 80);
           setHeight(data.height || 180);
@@ -132,6 +267,17 @@ export default function Dashboard() {
           setGoalWeight(data.goalWeight || 75);
           setCaloriesGoal(data.caloriesGoal || 2200);
           setProteinGoal(data.proteinGoal || 180);
+
+          const g: GoalType | undefined = data.goalType;
+          if (g) {
+            setGoalType(g);
+            setShowGoalPick(false);
+          } else {
+            setGoalType(null);
+            setShowGoalPick(true);
+          }
+        } else {
+          setShowGoalPick(true);
         }
 
         const qNutrition = query(collection(db,"nutrition"), where("userId","==",user.uid), where("date","==",todayStr));
@@ -254,6 +400,105 @@ export default function Dashboard() {
             </div>
 
           </div>
+
+          {/* GOAL PICKER */}
+          {showGoalPick && (
+            <div className="bg-white/10 backdrop-blur-xl border border-white/20 p-5 rounded-xl shadow">
+              <div className="font-bold mb-2">Wähle dein Ziel</div>
+              <div className="text-sm text-gray-400 mb-4">
+                Danach setzt die App automatisch deine Kalorien- und Protein-Ziele.
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  onClick={() => saveGoal("fat_loss")}
+                  className="bg-white/10 hover:bg-white/20 border border-white/20 rounded-xl p-3 text-left"
+                >
+                  <div className="font-bold">🔥 Fett verlieren</div>
+                  <div className="text-xs text-gray-400">Defizit + mehr Protein</div>
+                </button>
+
+                <button
+                  onClick={() => saveGoal("muscle_gain")}
+                  className="bg-white/10 hover:bg-white/20 border border-white/20 rounded-xl p-3 text-left"
+                >
+                  <div className="font-bold">💪 Muskelaufbau</div>
+                  <div className="text-xs text-gray-400">leichtes Plus + Protein</div>
+                </button>
+
+                <button
+                  onClick={() => saveGoal("maintain")}
+                  className="bg-white/10 hover:bg-white/20 border border-white/20 rounded-xl p-3 text-left"
+                >
+                  <div className="font-bold">⚖️ Halten</div>
+                  <div className="text-xs text-gray-400">stabil & sauber</div>
+                </button>
+
+                <button
+                  onClick={() => saveGoal("health")}
+                  className="bg-white/10 hover:bg-white/20 border border-white/20 rounded-xl p-3 text-left"
+                >
+                  <div className="font-bold">🫀 Gesund</div>
+                  <div className="text-xs text-gray-400">leichtes Defizit</div>
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* COACH STATUS */}
+          {goalType && (
+            <div className="bg-white/10 backdrop-blur-xl border border-white/20 p-5 rounded-xl shadow">
+              <div className="flex justify-between items-center mb-2">
+                <div className="font-bold">Dein Tages-Coach</div>
+                <div className="text-xs text-gray-400">
+                  Ziel: {goalLabel(goalType)}
+                </div>
+              </div>
+
+              {(() => {
+                const s = dailyCoachStatus(goalType, calories, caloriesGoal, protein, proteinGoal);
+                return (
+                  <>
+                    <div className="text-lg font-bold">{s.label}</div>
+                    <div className="text-sm text-gray-400 mt-1">{s.hint}</div>
+                  </>
+                );
+              })()}
+            </div>
+          )}
+
+          {/* ETA / PROGNOSE */}
+          {goalType && (
+            <div className="bg-white/10 backdrop-blur-xl border border-white/20 p-5 rounded-xl shadow">
+              <div className="font-bold mb-1">Prognose</div>
+              <div className="text-sm text-gray-400 mb-3">
+                (Konservativ geschätzt – je nach Konsistenz schneller/langsamer)
+              </div>
+
+              {(() => {
+                const days = etaToGoalDays(goalType, weight, goalWeight);
+                if (days === null) {
+                  return <div className="text-sm text-gray-300">Für dieses Ziel gibt’s keine Zielgewicht-ETA.</div>;
+                }
+                if (days === 0) {
+                  return <div className="text-lg font-bold">✅ Zielgewicht erreicht</div>;
+                }
+                const etaDate = new Date();
+                etaDate.setDate(etaDate.getDate() + days);
+
+                return (
+                  <>
+                    <div className="text-lg font-bold">
+                      ~{days} Tage bis {goalWeight} kg
+                    </div>
+                    <div className="text-sm text-gray-400">
+                      Voraussichtlich um: {etaDate.toLocaleDateString()}
+                    </div>
+                  </>
+                );
+              })()}
+            </div>
+          )}
 
           {/* STATS */}
           <div className="grid grid-cols-2 gap-3">
