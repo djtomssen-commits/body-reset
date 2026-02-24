@@ -11,7 +11,11 @@ import {
   doc,
   setDoc,
   getDoc,
-  deleteDoc
+  deleteDoc,
+  collection,
+  query,
+  where,
+  getDocs
 } from "firebase/firestore";
 
 import {
@@ -238,14 +242,35 @@ export default function Profile() {
 
   };
 
+  const deleteCollection = async (name: string) => {
+
+    const q = query(
+      collection(db, name),
+      where("userId", "==", userId)
+    );
+
+    const snap = await getDocs(q);
+
+    for (const d of snap.docs) {
+      await deleteDoc(d.ref);
+    }
+
+  };
+
   const deleteProfile = async () => {
 
     const ok =
       confirm(
-        "Willst du dein Profil wirklich löschen?\n\nDiese Aktion kann NICHT rückgängig gemacht werden."
+        "Willst du dein Profil wirklich löschen?\n\nALLE Daten werden gelöscht und können NICHT wiederhergestellt werden."
       );
 
     if (!ok) return;
+
+    await deleteCollection("nutrition");
+    await deleteCollection("training");
+    await deleteCollection("weight");
+    await deleteCollection("favorites");
+    await deleteCollection("subscriptions");
 
     await deleteDoc(
       doc(db, "users", userId)

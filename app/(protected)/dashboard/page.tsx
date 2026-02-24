@@ -77,6 +77,11 @@ export default function Dashboard() {
   const [goalType, setGoalType] = useState<GoalType | null>(null);
   const [showGoalPick, setShowGoalPick] = useState(false);
 
+  // COACH / ANALYSE / AUTOPILOT
+  const [nutritionHistory, setNutritionHistory] = useState<any[]>([]);
+  const [autopilot, setAutopilot] = useState(true);
+  const [lastAutopilotRun, setLastAutopilotRun] = useState<string>("");
+
   const levelProgress = xp % 100;
 
   const caloriesPercent = Math.min((calories / caloriesGoal) * 100, 100);
@@ -126,6 +131,50 @@ export default function Dashboard() {
     prot = clamp(Math.round(prot), 90, 260);
 
     return { cal, prot };
+  };
+
+  const onTrackStatus = (
+    g: GoalType,
+    cal: number,
+    calGoal: number,
+    prot: number,
+    protGoal: number
+  ) => {
+
+    // ✅ Noch nichts oder zu wenig getrackt
+    if (cal < 10 && prot < 2) {
+      return {
+        label: "🟦 Noch keine Daten",
+        hint: "Trag eine Mahlzeit ein – dann kann ich sagen, ob du auf Kurs bist."
+      };
+    }
+
+    const protOk = prot >= protGoal * 0.9;
+
+    if (g === "fat_loss") {
+      if (cal <= calGoal && protOk) return { label: "✅ Auf Fettverlust-Kurs", hint: "Defizit passt + Protein passt." };
+      if (cal <= calGoal && !protOk) return { label: "⚠️ Fast auf Kurs", hint: "Kalorien passen, Protein fehlt." };
+      if (cal <= calGoal * 1.1) return { label: "⚠️ Neutral", hint: "Leicht drüber – heute wird’s eher Maintenance." };
+      return { label: "❌ Nicht auf Kurs", hint: "Deutlich über dem Ziel – morgen wieder sauber." };
+    }
+
+    if (g === "muscle_gain") {
+      if (cal >= calGoal * 0.95 && protOk) return { label: "✅ Auf Aufbau-Kurs", hint: "Energie + Protein passen." };
+      if (!protOk) return { label: "⚠️ Aufbau bremst", hint: "Protein ist der Engpass." };
+      return { label: "⚠️ Neutral", hint: "Für Aufbau fehlt Energie." };
+    }
+
+    if (g === "maintain") {
+      const calOk = Math.abs(cal - calGoal) <= calGoal * 0.05;
+      if (calOk && protOk) return { label: "✅ Stabil", hint: "Im Rahmen + Protein passt." };
+      if (calOk && !protOk) return { label: "⚠️ Stabil, aber…", hint: "Protein etwas niedrig." };
+      return { label: "⚠️ Schwankung", hint: "Kalorien sind heute deutlich weg vom Ziel." };
+    }
+
+    // health
+    if (protOk && cal <= calGoal * 1.05) return { label: "✅ Gesund auf Kurs", hint: "Solide Basis heute." };
+    if (!protOk) return { label: "⚠️ Gesund, aber…", hint: "Protein ist heute der Hebel." };
+    return { label: "⚠️ Neutral", hint: "Etwas drüber – kein Drama." };
   };
 
   // Tagesbewertung (zielbasiert)
@@ -222,6 +271,68 @@ export default function Dashboard() {
 
   };
 
+  const behaviorAnalysis = (g: GoalType) => {
+
+    // keine Daten -> keine Analyse
+    if (!nutritionHistory || nutritionHistory.length === 0) {
+      return {
+        title: "Analyse",
+        body: "Noch keine Historie – trag ein paar Tage ein, dann kann ich Muster erkennen."
+      };
+    }
+
+    // letzte 7 Tage aggregieren
+    const byDay: Record<string, { cal: number; prot: number }> = {};
+    nutritionHistory.forEach((x:any) => {
+      const day = String(x.date || "");
+      if (!day) return;
+      if (!byDay[day]) byDay[day] = { cal: 0, prot: 0 };
+      byDay[day].cal += Number(x.calories || 0);
+      byDay[day].prot += Number(x.protein || 0);
+    });
+
+    const days = Object.keys(byDay)
+      .map(d => ({ d, t: new Date(d).getTime() }))
+      .filter(x => !Number.isNaN(x.t))
+      .sort((a,b)=>b.t-a.t)
+      .slice(0,7)
+      .map(x=>x.d);
+
+    if (days.length === 0) {
+      return {
+        title: "Analyse",
+        body: "Noch keine Historie – trag ein paar Tage ein, dann kann ich Muster erkennen."
+      };
+    }
+
+    const calMet = days.filter(d => byDay[d].cal >= caloriesGoal * 0.95 && byDay[d].cal <= caloriesGoal * 1.05).length;
+    const protMet = days.filter(d => byDay[d].prot >= proteinGoal * 0.9).length;
+
+    const calRate = Math.round((calMet / days.length) * 100);
+    const protRate = Math.round((protMet / days.length) * 100);
+
+    let biggest = "Konsistenz";
+    if (protRate < calRate) biggest = "Protein";
+    if (calRate < protRate) biggest = "Kalorien";
+
+    let body = `Letzte ${days.length} Tage: Kalorien-Ziel an ${calRate}% der Tage, Protein-Ziel an ${protRate}% der Tage.`;
+
+    if (biggest === "Protein") {
+      body += " Größter Hebel: Protein erhöhen.";
+    } else if (biggest === "Kalorien") {
+      body += " Größter Hebel: Kalorien stabiler treffen.";
+    } else {
+      body += " Stark: du bist ziemlich konstant.";
+    }
+
+    // kurze, ziel-spezifische Zusatzinfo
+    if (g === "fat_loss" && calRate < 50) body += " Für Fettverlust ist das Defizit der wichtigste Faktor.";
+    if (g === "muscle_gain" && protRate < 60) body += " Für Aufbau ist Protein dein Engpass.";
+    if (g === "maintain" && calRate < 50) body += " Für Halten ist weniger Schwankung der Schlüssel.";
+
+    return { title: "Analyse", body };
+  };
+
   const etaToGoalDays = (g: GoalType, currentKg: number, targetKg: number) => {
     const diff = targetKg - currentKg;
 
@@ -280,6 +391,7 @@ export default function Dashboard() {
   useEffect(() => {
 
     let unsubNutrition:any;
+    let unsubNutritionAll:any;
     let unsubWeight:any;
     let unsubTraining:any;
 
@@ -332,6 +444,9 @@ export default function Dashboard() {
           setCaloriesGoal(data.caloriesGoal || 2200);
           setProteinGoal(data.proteinGoal || 180);
 
+          setAutopilot(data.autopilot !== undefined ? Boolean(data.autopilot) : true);
+          setLastAutopilotRun(data.lastAutopilotRun || "");
+
           const g: GoalType | undefined = data.goalType;
           if (g) {
             setGoalType(g);
@@ -349,7 +464,7 @@ export default function Dashboard() {
           let totalCalories = 0;
           let totalProtein = 0;
           snapshot.forEach(doc=>{
-            const d = doc.data();
+            const d:any = doc.data();
             totalCalories += Number(d.calories || 0);
             totalProtein += Number(d.protein || 0);
           });
@@ -357,11 +472,25 @@ export default function Dashboard() {
           setProtein(totalProtein);
         });
 
+        const qNutritionAll = query(collection(db,"nutrition"), where("userId","==",user.uid));
+        unsubNutritionAll = onSnapshot(qNutritionAll,(snapshot)=>{
+          const list:any[] = [];
+          snapshot.forEach(doc=>{
+            const d:any = doc.data();
+            list.push({
+              date: d.date,
+              calories: Number(d.calories || 0),
+              protein: Number(d.protein || 0),
+            });
+          });
+          setNutritionHistory(list);
+        });
+
         const qWeight = query(collection(db,"weight"), where("userId","==",user.uid));
         unsubWeight = onSnapshot(qWeight,(snapshot)=>{
           const list:any[] = [];
           snapshot.forEach(doc=>{
-            const d = doc.data();
+            const d:any = doc.data();
             list.push({
               date: new Date(d.date).toLocaleDateString(),
               weight: Number(d.weight)
@@ -375,7 +504,7 @@ export default function Dashboard() {
         unsubTraining = onSnapshot(qTraining,(snapshot)=>{
           const all:any[] = [];
           snapshot.forEach(doc=>{
-            const d = doc.data();
+            const d:any = doc.data();
             if (!d.isCardio && d.weight > 0) {
               all.push({
                 date: new Date(d.createdAt).toLocaleDateString(),
@@ -398,11 +527,83 @@ export default function Dashboard() {
     return () => {
       unsubAuth();
       if(unsubNutrition) unsubNutrition();
+      if(unsubNutritionAll) unsubNutritionAll();
       if(unsubWeight) unsubWeight();
       if(unsubTraining) unsubTraining();
     };
 
   }, []);
+
+  // AUTOPILOT: konservatives Feintuning (nur 1x pro Tag)
+  useEffect(() => {
+
+    const run = async () => {
+
+      if (!userId) return;
+      if (!goalType) return;
+      if (!autopilot) return;
+
+      // Schutz: nur 1x pro Tag
+      if (lastAutopilotRun === todayStr) return;
+
+      // nur wenn genug Gewichts-Historie
+      if (!weightHistory || weightHistory.length < 6) return;
+
+      // letzte ~14 Tage (über Date-String sortiert)
+      const sorted = [...weightHistory].sort((a,b)=>new Date(a.date).getTime() - new Date(b.date).getTime());
+      const recent = sorted.slice(-14);
+
+      if (recent.length < 6) return;
+
+      const first = Number(recent[0].weight);
+      const last = Number(recent[recent.length - 1].weight);
+      const change = last - first;
+
+      // Plateau-Check (sehr konservativ)
+      const plateau = Math.abs(change) < 0.2;
+
+      if (!plateau) return;
+
+      // Autopilot Regeln (klein, sicher)
+      let newCalGoal = caloriesGoal;
+      let newProtGoal = proteinGoal;
+
+      if (goalType === "fat_loss") {
+        newCalGoal = clamp(caloriesGoal - 150, 1400, 4000);
+        newProtGoal = clamp(proteinGoal + 5, 90, 260);
+      }
+
+      if (goalType === "muscle_gain") {
+        newCalGoal = clamp(caloriesGoal + 150, 1400, 4000);
+        newProtGoal = clamp(proteinGoal + 5, 90, 260);
+      }
+
+      if (goalType === "maintain") {
+        newProtGoal = clamp(proteinGoal + 5, 90, 260);
+      }
+
+      if (goalType === "health") {
+        newProtGoal = clamp(proteinGoal + 5, 90, 260);
+      }
+
+      // nichts zu tun?
+      if (newCalGoal === caloriesGoal && newProtGoal === proteinGoal) return;
+
+      await updateDoc(doc(db, "users", userId), {
+        caloriesGoal: newCalGoal,
+        proteinGoal: newProtGoal,
+        lastAutopilotRun: todayStr
+      });
+
+      setCaloriesGoal(newCalGoal);
+      setProteinGoal(newProtGoal);
+      setLastAutopilotRun(todayStr);
+
+    };
+
+    run();
+
+  }, [userId, goalType, autopilot, lastAutopilotRun, todayStr, weightHistory, caloriesGoal, proteinGoal]);
 
   useEffect(()=>{
     const bmiValue = weight / ((height/100)*(height/100));
@@ -545,6 +746,28 @@ export default function Dashboard() {
             </div>
           </div>
 
+          {/* ON TRACK */}
+          {goalType && (
+            <div className="bg-white/10 backdrop-blur-xl border border-white/20 p-5 rounded-xl shadow">
+              <div className="flex justify-between items-center mb-2">
+                <div className="font-bold">Heute</div>
+                <div className="text-xs text-gray-400">
+                  Ziel: {goalLabel(goalType)}
+                </div>
+              </div>
+
+              {(() => {
+                const s = onTrackStatus(goalType, calories, caloriesGoal, protein, proteinGoal);
+                return (
+                  <>
+                    <div className="text-lg font-bold">{s.label}</div>
+                    <div className="text-sm text-gray-400 mt-1">{s.hint}</div>
+                  </>
+                );
+              })()}
+            </div>
+          )}
+
           {/* COACH STATUS */}
           {goalType && (
             <div className="bg-white/10 backdrop-blur-xl border border-white/20 p-5 rounded-xl shadow">
@@ -561,6 +784,26 @@ export default function Dashboard() {
                   <>
                     <div className="text-lg font-bold">{s.label}</div>
                     <div className="text-sm text-gray-400 mt-1">{s.hint}</div>
+                  </>
+                );
+              })()}
+            </div>
+          )}
+
+          {/* ANALYSE */}
+          {goalType && (
+            <div className="bg-white/10 backdrop-blur-xl border border-white/20 p-5 rounded-xl shadow">
+              {(() => {
+                const a = behaviorAnalysis(goalType);
+                return (
+                  <>
+                    <div className="font-bold mb-2">{a.title}</div>
+                    <div className="text-sm text-gray-300">{a.body}</div>
+                    {autopilot && (
+                      <div className="text-xs text-gray-500 mt-3">
+                        Autopilot: aktiv
+                      </div>
+                    )}
                   </>
                 );
               })()}
