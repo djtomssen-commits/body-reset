@@ -509,6 +509,15 @@ export default function SubscriptionPage() {
               )}
             </div>
 
+            {/* ✅ NEU: Consent Status Anzeige */}
+            {canPurchase && (
+              <div className={`mt-3 text-xs ${consentsSaved ? "text-emerald-300" : "text-amber-300"}`}>
+                {consentsSaved
+                  ? "✅ Zustimmung gespeichert. Du kannst jetzt bezahlen."
+                  : "⏳ Zustimmung wird gespeichert..."}
+              </div>
+            )}
+
             {(!canPurchase) && (
               <div className="mt-3 text-xs text-amber-300">
                 Für den Kauf müssen beide Haken gesetzt sein.
