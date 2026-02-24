@@ -134,6 +134,11 @@ export default function Dashboard() {
     const calOk = Math.abs(calDiff) <= calGoal * 0.05; // ±5%
     const protOk = prot >= protGoal * 0.9;
 
+// Wenn heute noch nichts getrackt wurde, keine Bewertung ausgeben
+if (cal === 0 && prot === 0) {
+  return { label: "📝 Noch nichts getrackt", hint: "Trag heute mindestens eine Mahlzeit ein, dann gibt’s eine Bewertung." };
+}
+
     if (g === "fat_loss") {
       if (cal <= calGoal && protOk) return { label: "✅ Optimal für Fettverlust", hint: "Kalorien im Ziel + Protein passt." };
       if (cal <= calGoal && !protOk) return { label: "⚠️ Fast gut", hint: "Kalorien ok, aber Protein ist zu niedrig." };
