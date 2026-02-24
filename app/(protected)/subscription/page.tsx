@@ -52,31 +52,55 @@ export default function SubscriptionPage() {
   }, [legalAccepted, digitalWaiverAccepted]);
 
   // ✅ NEU: Serverseitig Consent speichern (damit create-order/capture-order durchgehen)
-  const saveConsents = async () => {
-    try {
-      const user = auth.currentUser;
-      if (!user) return;
-
-      const token = await user.getIdToken();
-      const res = await fetch("/api/subscription/accept-consents", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      const json = await res.json().catch(() => null);
-      if (!res.ok || !json?.ok) {
-        setErrorMsg(json?.error || "Consent speichern fehlgeschlagen.");
-        return;
-      }
-
-      setConsentsSaved(true);
-    } catch (e: any) {
-      console.error(e);
-      setErrorMsg(e?.message || "Consent speichern fehlgeschlagen (Network/Server).");
+const saveConsents = async () => {
+  try {
+    const user = auth.currentUser;
+    if (!user) {
+      setErrorMsg("Nicht eingeloggt.");
+      return;
     }
-  };
+
+    setStatusMsg("⏳ Zustimmung wird gespeichert...");
+    setErrorMsg("");
+
+    const token = await user.getIdToken();
+    const res = await fetch("/api/subscription/accept-consents", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        legalAccepted: true,
+        digitalWaiverAccepted: true,
+        acceptedAt: new Date().toISOString(),
+      }),
+    });
+
+    const text = await res.text();
+
+    let json: any = null;
+    try {
+      json = JSON.parse(text);
+    } catch {
+      // falls keine JSON Response
+    }
+
+    if (!res.ok || !json?.ok) {
+      console.error("accept-consents failed:", res.status, text);
+      setErrorMsg(json?.error || `Consent speichern fehlgeschlagen (${res.status}).`);
+      setStatusMsg("");
+      return;
+    }
+
+    setConsentsSaved(true);
+    setStatusMsg("✅ Zustimmung gespeichert.");
+  } catch (e: any) {
+    console.error(e);
+    setErrorMsg(e?.message || "Consent speichern fehlgeschlagen (Network/Server).");
+    setStatusMsg("");
+  }
+};
 
   // ✅ NEU: Sobald beide Checkboxen gesetzt sind -> Consent einmalig speichern
   useEffect(() => {
