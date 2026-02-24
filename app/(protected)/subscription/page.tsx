@@ -64,7 +64,7 @@ const saveConsents = async () => {
     setErrorMsg("");
 
     const token = await user.getIdToken();
-    const res = await fetch("/api/subscription/accept-consents", {
+    const res = await fetch("/api/accept-consents", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${token}`,
