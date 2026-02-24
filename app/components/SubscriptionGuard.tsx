@@ -31,6 +31,12 @@ export default function SubscriptionGuard({ children }: any) {
         return;
       }
 
+      // ✅ Dashboard nach Onboarding auch ohne Abo erlauben
+      if (pathname === "/dashboard") {
+        setLoading(false);
+        return;
+      }
+
       const subSnap = await getDoc(doc(db, "subscriptions", user.uid));
 
       if (!subSnap.exists()) {
