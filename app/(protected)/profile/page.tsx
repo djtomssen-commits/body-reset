@@ -10,10 +10,14 @@ import { auth, db } from "../../lib/firebase";
 import {
   doc,
   setDoc,
-  getDoc
+  getDoc,
+  deleteDoc
 } from "firebase/firestore";
 
-import { onAuthStateChanged } from "firebase/auth";
+import {
+  onAuthStateChanged,
+  signOut
+} from "firebase/auth";
 
 export default function Profile() {
 
@@ -22,7 +26,8 @@ export default function Profile() {
   const [userId, setUserId] = useState("");
 
   // Ziel
-  const [goal, setGoal] = useState("lose");
+  type GoalType = "fat_loss" | "maintain" | "muscle_gain" | "health";
+  const [goalType, setGoalType] = useState<GoalType>("fat_loss");
   const [autoMode, setAutoMode] = useState(true);
 
   // Körperdaten
@@ -67,14 +72,20 @@ export default function Profile() {
 
     let calories = maintenance;
 
-    if (goal === "lose")
+    if (goalType === "fat_loss")
       calories -= 300;
 
-    if (goal === "gain")
+    if (goalType === "muscle_gain")
       calories += 250;
 
+    if (goalType === "maintain")
+      calories = maintenance;
+
+    if (goalType === "health")
+      calories -= 250;
+
     const protein =
-      goal === "lose"
+      goalType === "fat_loss"
         ? weight * 2.2
         : weight * 2.0;
 
@@ -86,7 +97,7 @@ export default function Profile() {
       Math.round(protein)
     );
 
-  }, [goal, height, weight, autoMode]);
+  }, [goalType, height, weight, autoMode]);
 
   // Körperberechnungen
   useEffect(() => {
@@ -96,9 +107,10 @@ export default function Profile() {
       ((height / 100) *
       (height / 100));
 
-setBmi(
-  parseFloat(Number(bmiValue).toFixed(1))
-);
+    setBmi(
+      parseFloat(Number(bmiValue).toFixed(1))
+    );
+
     const kfaValue =
       belly > 0
         ? ((belly * 0.74) -
@@ -106,9 +118,9 @@ setBmi(
           44.74) / weight * 100
         : 0;
 
-setKfa(
-  parseFloat(Number(kfaValue).toFixed(1))
-);
+    setKfa(
+      parseFloat(Number(kfaValue).toFixed(1))
+    );
 
     const total =
       startWeight - goalWeight;
@@ -159,9 +171,9 @@ setKfa(
 
         if (snap.exists()) {
 
-          const data = snap.data();
+          const data:any = snap.data();
 
-          setGoal(data.goal || "lose");
+          setGoalType((data.goalType || "fat_loss") as GoalType);
 
           setHeight(data.height || 180);
           setWeight(data.weight || 80);
@@ -209,7 +221,7 @@ setKfa(
     await setDoc(
       doc(db, "users", userId),
       {
-        goal,
+        goalType,
         height,
         weight,
         belly,
@@ -223,6 +235,25 @@ setKfa(
     );
 
     alert("Profil gespeichert");
+
+  };
+
+  const deleteProfile = async () => {
+
+    const ok =
+      confirm(
+        "Willst du dein Profil wirklich löschen?\n\nDiese Aktion kann NICHT rückgängig gemacht werden."
+      );
+
+    if (!ok) return;
+
+    await deleteDoc(
+      doc(db, "users", userId)
+    );
+
+    await signOut(auth);
+
+    router.push("/login");
 
   };
 
@@ -297,24 +328,28 @@ setKfa(
             </div>
 
             <select
-  value={goal}
-  onChange={(e)=>
-    setGoal(e.target.value)
-  }
-  className="border border-white/20 bg-slate-900 text-white p-2 w-full rounded"
->
+              value={goalType}
+              onChange={(e)=>
+                setGoalType(e.target.value as GoalType)
+              }
+              className="border border-white/20 bg-slate-900 text-white p-2 w-full rounded"
+            >
 
-              <option value="lose" className="bg-slate-900 text-white">
-  Fett verlieren
-</option>
+              <option value="fat_loss" className="bg-slate-900 text-white">
+                Fett verlieren
+              </option>
 
-<option value="maintain" className="bg-slate-900 text-white">
-  Muskel erhalten
-</option>
+              <option value="maintain" className="bg-slate-900 text-white">
+                Gewicht halten
+              </option>
 
-<option value="gain" className="bg-slate-900 text-white">
-  Muskel aufbauen
-</option>
+              <option value="muscle_gain" className="bg-slate-900 text-white">
+                Muskel aufbauen
+              </option>
+
+              <option value="health" className="bg-slate-900 text-white">
+                Gesünder leben
+              </option>
 
             </select>
 
@@ -412,6 +447,15 @@ setKfa(
           >
 
             Profil speichern
+
+          </button>
+
+          <button
+            onClick={deleteProfile}
+            className="bg-red-600 hover:bg-red-500 text-white p-4 w-full rounded-xl font-bold shadow-lg"
+          >
+
+            Profil löschen
 
           </button>
 
