@@ -747,7 +747,7 @@ export default function Dashboard() {
           </div>
 
           {/* ON TRACK */}
-          {goalType && (
+          {false && goalType && (
             <div className="bg-white/10 backdrop-blur-xl border border-white/20 p-5 rounded-xl shadow">
               <div className="flex justify-between items-center mb-2">
                 <div className="font-bold">Heute</div>
