@@ -19,8 +19,15 @@ export default function SubscriptionGuard({ children }: any) {
       }
 
       // Diese Seiten sind IMMER erlaubt
-      if (pathname === "/subscription" || pathname === "/login") {
+      if (pathname === "/subscription" || pathname === "/login" || pathname === "/onboarding") {
         setLoading(false);
+        return;
+      }
+
+      const userSnap = await getDoc(doc(db, "users", user.uid));
+
+      if (!userSnap.exists() || !userSnap.data()?.onboardingCompleted) {
+        router.push("/onboarding");
         return;
       }
 
