@@ -5,12 +5,8 @@ import { getAuth, GoogleAuthProvider } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
 const firebaseConfig = {
-  apiKey:1irgmNGHMvvI",
-  authDomain: "body-reset-49a74.firebaseapp.com",
-  projectId: "body-reset-49a74",
-  storageBucket: "body-reset-49a74.firebasestorage.app",
-  messagingSenderId: "366999871121",
-  appId: "1:366999871121:web:d8069c7d1a61eccae7a930"
+  
+  auth"
 };
 const app = initializeApp(firebaseConfig);
 
